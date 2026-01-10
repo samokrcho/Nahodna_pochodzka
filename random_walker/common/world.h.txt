@@ -1,0 +1,14 @@
+#ifndef WORLD_H
+#define WORLD_H
+
+typedef struct {
+    int width, height;
+    char **cells;
+} World;
+
+World* create_world(int w, int h);
+World* create_world_with_obstacles(int w, int h, double obs_ratio);
+void destroy_world(World* w);
+void print_world(World* w, int walker_x, int walker_y);
+
+#endif

@@ -1,0 +1,148 @@
+#include "../common/protocol.h"
+#include "../common/world.h"
+#include "../common/simulation.h"
+#include <stdio.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <stdlib.h>
+#include <sys/wait.h>
+#include <termios.h>
+
+int fd_cmd[2];
+int fd_state[2];
+volatile int running = 0;
+volatile SimMode mode = MODE_INTERACTIVE;
+volatile int sum_type = 0;
+pthread_mutex_t mode_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+Simulation *sim; // potrebné pre sumárny mód
+
+// nenárazove citanie klaves
+int getch(){
+    struct termios oldt,newt;
+    int ch;
+    tcgetattr(STDIN_FILENO,&oldt);
+    newt=oldt;
+    newt.c_lflag &= ~(ICANON|ECHO);
+    tcsetattr(STDIN_FILENO,TCSANOW,&newt);
+    ch=getchar();
+    tcsetattr(STDIN_FILENO,TCSANOW,&oldt);
+    return ch;
+}
+
+void* input_thread(void* arg){
+    while(running){
+        char c = getch();
+        CommandType cmd;
+
+        if(c=='i') cmd = CMD_MODE_SWITCH;
+        else if(c=='t') cmd = CMD_SUM_TYPE_SWITCH;
+        else if(c=='q') cmd = CMD_QUIT;
+        else continue;
+
+        write(fd_cmd[1],&cmd,sizeof(cmd));
+        if(cmd==CMD_QUIT) break;
+    }
+    return NULL;
+}
+
+void* render_thread(void* arg){
+    WorldState ws;
+    while(running){
+        if(read(fd_state[0],&ws,sizeof(ws))==sizeof(ws)){
+            system("clear");
+            printf("Replikacia %d / %d | Krok %d\n",ws.current_rep,ws.total_rep,ws.step);
+
+            World w;
+            w.width = ws.width;
+            w.height = ws.height;
+            w.cells = malloc(w.height*sizeof(char*));
+            for(int y=0;y<w.height;y++){
+                w.cells[y] = malloc(w.width);
+                for(int x=0;x<w.width;x++)
+                    w.cells[y][x] = ws.cells[y][x];
+            }
+
+            pthread_mutex_lock(&mode_mutex);
+            SimMode current_mode = mode;
+            int current_sum_type = sum_type;
+            pthread_mutex_unlock(&mode_mutex);
+
+            if(current_mode==MODE_INTERACTIVE){
+                print_world(&w, ws.walker_x, ws.walker_y);
+            }else{
+                // sumárny mód
+                for(int y=0;y<w.height;y++){
+                    for(int x=0;x<w.width;x++){
+                        if(w.cells[y][x]=='#') putchar('#');
+                        else if(current_sum_type==0)
+                            printf("%3.0f",simulation_get_avg(sim,x,y));
+                        else
+                            printf("%3.0f",100*simulation_get_prob(sim,x,y));
+                    }
+                    putchar('\n');
+                }
+            }
+
+            for(int y=0;y<w.height;y++) free(w.cells[y]);
+            free(w.cells);
+        }
+    }
+    return NULL;
+}
+
+void create_simulation(){
+    SimulationConfig cfg;
+    printf("Sirka vyska: "); scanf("%d %d",&cfg.width,&cfg.height);
+    printf("Replikacie: "); scanf("%d",&cfg.replikacie);
+    printf("K: "); scanf("%d",&cfg.K);
+    printf("Pravd UP DOWN LEFT RIGHT: "); scanf("%lf %lf %lf %lf",&cfg.prob_up,&cfg.prob_down,&cfg.prob_left,&cfg.prob_right);
+    printf("Typ sveta (0=bez prekazok,1=s prekazkami): "); scanf("%d",&cfg.world_type);
+    cfg.obstacle_ratio=0;
+    if(cfg.world_type==1){
+        printf("Ratio prekazok: "); scanf("%lf",&cfg.obstacle_ratio);
+    }
+
+    pipe(fd_cmd);
+    pipe(fd_state);
+
+    pid_t pid = fork();
+    if(pid==0){
+        dup2(fd_cmd[0],STDIN_FILENO);
+        dup2(fd_state[1],STDOUT_FILENO);
+        execl("../server/server","server",NULL);
+        exit(1);
+    }
+
+    if(cfg.world_type==0)
+        sim = create_simulation(cfg.width,cfg.height,cfg.K,cfg.replikacie);
+    else
+        sim = create_simulation_with_obstacles(cfg.width,cfg.height,cfg.K,cfg.replikacie,cfg.obstacle_ratio);
+
+    write(fd_cmd[1],&cfg,sizeof(cfg));
+    running = 1;
+
+    pthread_t in_th, rd_th;
+    pthread_create(&in_th,NULL,input_thread,NULL);
+    pthread_create(&rd_th,NULL,render_thread,NULL);
+
+    waitpid(pid,NULL,0);
+    running=0;
+
+    pthread_join(in_th,NULL);
+    pthread_join(rd_th,NULL);
+
+    destroy_simulation(sim);
+}
+
+int main(){
+    int c;
+    while(1){
+        printf("\n1 - Nova simulacia\n2 - Koniec\nVolba: ");
+        scanf("%d",&c);
+        getchar();
+        if(c==1) create_simulation();
+        else break;
+    }
+    return 0;
+}

@@ -1,0 +1,43 @@
+#include "world.h"
+#include <stdlib.h>
+#include <stdio.h>
+
+World* create_world(int w, int h){
+    World* wld = malloc(sizeof(World));
+    wld->width = w;
+    wld->height = h;
+    wld->cells = malloc(h * sizeof(char*));
+    for(int y=0;y<h;y++){
+        wld->cells[y] = malloc(w);
+        for(int x=0;x<w->width;x++) wld->cells[y][x]='*';
+    }
+    return wld;
+}
+
+World* create_world_with_obstacles(int w, int h, double obs_ratio){
+    World* wld = create_world(w,h);
+    for(int y=0;y<h;y++){
+        for(int x=0;x<w;x++){
+            if(x==0 && y==0) continue;
+            double r = (double)rand()/RAND_MAX;
+            if(r < obs_ratio) wld->cells[y][x] = '#';
+        }
+    }
+    return wld;
+}
+
+void destroy_world(World* w){
+    for(int y=0;y<w->height;y++) free(w->cells[y]);
+    free(w->cells);
+    free(w);
+}
+
+void print_world(World* w, int walker_x, int walker_y){
+    for(int y=0;y<w->height;y++){
+        for(int x=0;x<w->width;x++){
+            if(x==walker_x && y==walker_y) putchar('C');
+            else putchar(w->cells[y][x]);
+        }
+        putchar('\n');
+    }
+}

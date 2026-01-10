@@ -1,0 +1,10 @@
+#include "walker.h"
+#include <stdlib.h>
+
+void walker_step(Walker* w,int width,int height){
+    double r=(double)rand()/RAND_MAX;
+    if(r<w->prob_up) w->y=(w->y-1+height)%height;
+    else if(r<w->prob_up+w->prob_down) w->y=(w->y+1)%height;
+    else if(r<w->prob_up+w->prob_down+w->prob_left) w->x=(w->x-1+width)%width;
+    else w->x=(w->x+1)%width;
+}

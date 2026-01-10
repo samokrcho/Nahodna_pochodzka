@@ -1,0 +1,26 @@
+#ifndef IPC_H
+#define IPC_H
+
+#include <stdint.h>
+
+typedef enum {
+    MSG_UPDATE,
+    MSG_END
+} MsgType;
+
+typedef struct {
+    MsgType type;
+    int x;
+    int y;
+} Message;
+
+// server
+int server_init(int port);
+int server_accept(int server_fd);
+int send_message(int fd, Message* msg);
+int recv_message(int fd, Message* msg);
+
+// client
+int client_connect(const char* ip, int port);
+
+#endif
