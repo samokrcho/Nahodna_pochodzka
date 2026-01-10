@@ -9,6 +9,7 @@ typedef struct {
     Walker walker;
     int K;
     int replikacie;
+    SimulationConfig config;  // uloží sa config, aby sa dal uložiť zo servera
     double **avg_steps;
     double **prob_success;
 } Simulation;

@@ -48,12 +48,12 @@ void send_world_state(Walker* w, int step, int rep){
 }
 
 void* simulation_thread(void* arg){
-    for(int rep=1;rep<=sim->replikacie && running;rep++){
+    for(int rep=1; rep<=sim->replikacie && running; rep++){
         Walker w = sim->walker;
         send_world_state(&w,0,rep);
 
         for(int step=1; step<=sim->K && running; step++){
-            walker_step(&w, sim->world->width, sim->world->height);
+            walker_step(&w, sim->world->width, sim->world->height, sim->world->cells);
             simulation_update_summary(sim,w.x,w.y,step);
 
             pthread_mutex_lock(&mode_mutex);
@@ -64,20 +64,32 @@ void* simulation_thread(void* arg){
                 send_world_state(&w, step, rep);
                 usleep(150000);
             }
+
+            if(w.x==0 && w.y==0) break;
         }
 
-        // Po replikacii vypis sumárny stav pre sumárny mód
-        pthread_mutex_lock(&mode_mutex);
-        if(mode==MODE_SUMMARY){
-            for(int y=0;y<sim->world->height;y++){
+        if(running && mode==MODE_SUMMARY){
+            for(int y=0;y<sim->world->height;y++)
                 for(int x=0;x<sim->world->width;x++){
                     w.x=x; w.y=y;
                     send_world_state(&w,0,rep);
                 }
-            }
         }
-        pthread_mutex_unlock(&mode_mutex);
     }
+
+    // uloz simulaciu po ukonceni
+    char** cells = malloc(sim->world->height * sizeof(char*));
+    for(int y=0;y<sim->world->height;y++){
+        cells[y] = malloc(sim->world->width);
+        for(int x=0;x<sim->world->width;x++)
+            cells[y][x] = sim->world->cells[y][x];
+    }
+
+    save_simulation_file(sim->config.output_file, &sim->config, cells);
+
+    for(int y=0;y<sim->world->height;y++) free(cells[y]);
+    free(cells);
+
     running=0;
     return NULL;
 }

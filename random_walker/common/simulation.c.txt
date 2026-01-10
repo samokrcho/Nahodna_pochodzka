@@ -67,3 +67,45 @@ double simulation_get_avg(Simulation* s,int x,int y){
 double simulation_get_prob(Simulation* s,int x,int y){
     return s->prob_success[y][x];
 }
+
+int save_simulation_file(const char* filename, SimulationConfig* cfg, char** world_cells){
+    FILE* f = fopen(filename,"wb");
+    if(!f) return -1;
+
+    fwrite(cfg,sizeof(SimulationConfig),1,f);
+
+    // uloz svet (cells)
+    for(int y=0;y<cfg->height;y++){
+        fwrite(world_cells[y],sizeof(char),cfg->width,f);
+    }
+
+    fclose(f);
+    return 0;
+}
+
+// ------------------------
+// načítanie simulacie
+int load_simulation_file(const char* filename, SimulationConfig* cfg){
+    FILE* f = fopen(filename,"rb");
+    if(!f) return -1;
+
+    fread(cfg,sizeof(SimulationConfig),1,f);
+
+    // alokacia a nacitanie sveta
+    char** cells = malloc(cfg->height * sizeof(char*));
+    for(int y=0;y<cfg->height;y++){
+        cells[y] = malloc(cfg->width);
+        fread(cells[y],sizeof(char),cfg->width,f);
+    }
+
+    // svet sa môže priradiť k simulacii alebo použiť na vytvorenie Simulation objektu
+    // klient si môže vytvoriť lokálne sim->world z týchto cells
+    // napr. sim = create_simulation(...); memcpy(sim->world->cells,cells,...)
+
+    // uvolni pamät po nacitani
+    for(int y=0;y<cfg->height;y++) free(cells[y]);
+    free(cells);
+
+    fclose(f);
+    return 0;
+}
