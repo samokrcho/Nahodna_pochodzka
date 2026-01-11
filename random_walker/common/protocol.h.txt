@@ -27,8 +27,6 @@ typedef struct {
 
     int world_type;        // 0 = bez prekážok, 1 = s prekážkami
     double obstacle_ratio;
-    char output_file[256];
-    char input_file[256];
 } SimulationConfig;
 
 #define MAX_W 64

@@ -91,41 +91,17 @@ void* render_thread(void* arg){
     return NULL;
 }
 
-// vytvorenie SimulationConfig z inputu alebo zo suboru
-SimulationConfig get_simulation_config(int from_file){
+void create_sim(){
     SimulationConfig cfg;
-    memset(&cfg,0,sizeof(cfg));
-    char input_file[256], output_file[256];
-
-    if(from_file){
-        printf("Subor so svetom: "); scanf("%s",input_file);
-        printf("Pocet replikacii: "); scanf("%d",&cfg.replikacie);
-        printf("Nazov vystupneho suboru: "); scanf("%s",output_file);
-        snprintf(cfg.output_file,sizeof(cfg.output_file),"vystupy/%s",output_file);
-        mkdir("vystupy",0755);
-
-        load_simulation_file(input_file,&cfg);
-    } else {
-        printf("Sirka vyska: "); scanf("%d %d",&cfg.width,&cfg.height);
-        printf("Replikacie: "); scanf("%d",&cfg.replikacie);
-        printf("K: "); scanf("%d",&cfg.K);
-        printf("Pravd UP DOWN LEFT RIGHT: "); scanf("%lf %lf %lf %lf",&cfg.prob_up,&cfg.prob_down,&cfg.prob_left,&cfg.prob_right);
-        printf("Typ sveta (0=bez prekazok,1=s prekazkami): "); scanf("%d",&cfg.world_type);
-        cfg.obstacle_ratio=0;
-        if(cfg.world_type==1){
-            printf("Ratio prekazok (0-1): "); scanf("%lf",&cfg.obstacle_ratio);
-        }
-        printf("Nazov vystupneho suboru: "); scanf("%s",output_file);
-        snprintf(cfg.output_file,sizeof(cfg.output_file),"vystupy/%s",output_file);
-        mkdir("vystupy",0755);
+    printf("Sirka vyska: "); scanf("%d %d",&cfg.width,&cfg.height);
+    printf("Replikacie: "); scanf("%d",&cfg.replikacie);
+    printf("K: "); scanf("%d",&cfg.K);
+    printf("Pravd UP DOWN LEFT RIGHT: "); scanf("%lf %lf %lf %lf",&cfg.prob_up,&cfg.prob_down,&cfg.prob_left,&cfg.prob_right);
+    printf("Typ sveta (0=bez prekazok,1=s prekazkami): "); scanf("%d",&cfg.world_type);
+    cfg.obstacle_ratio=0;
+    if(cfg.world_type==1){
+        printf("Ratio prekazok: "); scanf("%lf",&cfg.obstacle_ratio);
     }
-
-    return cfg;
-}
-
-// spustenie simulacie
-void start_simulation(int from_file){
-    SimulationConfig cfg = get_simulation_config(from_file);
 
     pipe(fd_cmd);
     pipe(fd_state);
@@ -138,14 +114,13 @@ void start_simulation(int from_file){
         exit(1);
     }
 
-    // lokalna simulacia pre sumarny mod
     if(cfg.world_type==0)
         sim = create_simulation(cfg.width,cfg.height,cfg.K,cfg.replikacie);
     else
         sim = create_simulation_with_obstacles(cfg.width,cfg.height,cfg.K,cfg.replikacie,cfg.obstacle_ratio);
 
     write(fd_cmd[1],&cfg,sizeof(cfg));
-    running=1;
+    running = 1;
 
     pthread_t in_th, rd_th;
     pthread_create(&in_th,NULL,input_thread,NULL);
@@ -163,11 +138,10 @@ void start_simulation(int from_file){
 int main(){
     int c;
     while(1){
-        printf("\n1 - Nova simulacia\n2 - Spustit simulaciu zo suboru\n3 - Koniec\nVolba: ");
+        printf("\n1 - Nova simulacia\n2 - Koniec\nVolba: ");
         scanf("%d",&c);
         getchar();
-        if(c==1) start_simulation(0);
-        else if(c==2) start_simulation(1);
+        if(c==1) create_sim();
         else break;
     }
     return 0;

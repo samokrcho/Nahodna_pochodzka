@@ -1,6 +1,5 @@
 # common kniznica
 add_library(common STATIC
-    ipc.c
     walker.c
     world.c
     simulation.c
