@@ -1,0 +1,11 @@
+#ifndef WALKER_H
+#define WALKER_H
+
+typedef struct {
+    int x,y;
+    double prob_up, prob_down, prob_left, prob_right;
+} Walker;
+
+void walker_step(Walker* w, int width, int height, char **cells);
+
+#endif

@@ -1,0 +1,26 @@
+#ifndef SIMULATION_H
+#define SIMULATION_H
+
+#include "world.h"
+#include "walker.h"
+
+typedef struct {
+    World *world;
+    Walker walker;
+    int K;
+    int replikacie;
+    double **avg_steps;
+    double **prob_success;
+} Simulation;
+
+Simulation* create_simulation(int w, int h, int K, int replikacie);
+Simulation* create_simulation_with_obstacles(int w, int h, int K, int replikacie, double obs_ratio);
+Simulation* create_simulation_from_file(const char *filename, int replikacie);
+void destroy_simulation(Simulation* sim);
+
+void simulation_reset_summary(Simulation *sim);
+void simulation_update_summary(Simulation *sim, int x, int y, int steps);
+double simulation_get_avg(Simulation *sim, int x, int y);
+double simulation_get_prob(Simulation *sim, int x, int y);
+
+#endif

@@ -1,0 +1,52 @@
+#ifndef PROTOCOL_H
+#define PROTOCOL_H
+
+#include <pthread.h>
+
+typedef enum {
+    CMD_MODE_SWITCH,
+    CMD_SUM_TYPE_SWITCH,
+    CMD_QUIT
+} CommandType;
+
+typedef enum {
+    MODE_INTERACTIVE,
+    MODE_SUMMARY
+} SimMode;
+
+typedef struct {
+    int width;
+    int height;
+    int K;
+    int replikacie;
+
+    double prob_up;
+    double prob_down;
+    double prob_left;
+    double prob_right;
+
+    int world_type;        // 0 = bez prekážok, 1 = s prekážkami
+    double obstacle_ratio;
+    char file_name[128];
+} SimulationConfig;
+
+#define MAX_W 64
+#define MAX_H 64
+
+typedef struct {
+    int width, height;
+    int walker_x, walker_y;
+    int step;
+    int current_rep;
+    int total_rep;
+    char cells[MAX_H][MAX_W];
+} WorldState;
+
+// klient -> server
+typedef struct {
+    int from_file;                // 1 = simulacia zo suboru, 0 = normalna
+    char file_name[128];          // platne len ak from_file = 1
+    SimulationConfig cfg;         // konfiguracia simulacie
+} ClientConfig;
+
+#endif

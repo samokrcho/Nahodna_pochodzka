@@ -1,0 +1,137 @@
+#include "../common/protocol.h"
+#include "../common/simulation.h"
+#include "../common/walker.h"
+#include <pthread.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <stdio.h>
+#include <string.h>
+
+int fd_cmd;
+int fd_out;
+Simulation *sim;
+
+volatile int running = 1;
+volatile SimMode mode = MODE_INTERACTIVE;
+volatile int sum_type = 0;
+pthread_mutex_t mode_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+// Bezpečný zápis do pipe
+ssize_t write_full(int fd, const void *buf, size_t count) {
+    size_t written = 0;
+    const char *ptr = buf;
+    while (written < count) {
+        ssize_t n = write(fd, ptr + written, count - written);
+        if (n <= 0) {
+            if (errno == EINTR) continue;
+            return -1;
+        }
+        written += n;
+    }
+    return written;
+}
+
+void* command_thread(void* arg){
+    CommandType cmd;
+    while(running){
+        if(read(fd_cmd,&cmd,sizeof(cmd))==sizeof(cmd)){
+            pthread_mutex_lock(&mode_mutex);
+            if(cmd==CMD_MODE_SWITCH)
+                mode = (mode==MODE_INTERACTIVE)?MODE_SUMMARY:MODE_INTERACTIVE;
+            else if(cmd==CMD_SUM_TYPE_SWITCH && mode==MODE_SUMMARY)
+                sum_type = !sum_type;
+            else if(cmd==CMD_QUIT) running=0;
+            pthread_mutex_unlock(&mode_mutex);
+        }
+        usleep(50000);
+    }
+    return NULL;
+}
+
+void send_world_state(Walker* w, int step, int rep){
+    WorldState ws;
+    ws.width = sim->world->width;
+    ws.height = sim->world->height;
+    ws.walker_x = w->x;
+    ws.walker_y = w->y;
+    ws.step = step;
+    ws.current_rep = rep;
+    ws.total_rep = sim->replikacie;
+
+    for(int y=0;y<ws.height;y++)
+        for(int x=0;x<ws.width;x++)
+            ws.cells[y][x] = sim->world->cells[y][x];
+
+    write_full(fd_out, &ws, sizeof(ws));
+}
+
+void* simulation_thread(void* arg){
+    for(int rep=1;rep<=sim->replikacie && running;rep++){
+        Walker w = sim->walker;
+        send_world_state(&w,0,rep);
+
+        for(int step=1; step<=sim->K && running; step++){
+            walker_step(&w, sim->world->width, sim->world->height, sim->world->cells);
+            simulation_update_summary(sim, w.x, w.y, step);
+
+            pthread_mutex_lock(&mode_mutex);
+            SimMode current_mode = mode;
+            pthread_mutex_unlock(&mode_mutex);
+
+            if(current_mode==MODE_INTERACTIVE){
+                send_world_state(&w, step, rep);
+                usleep(150000);
+            }
+        }
+
+        pthread_mutex_lock(&mode_mutex);
+        if(mode==MODE_SUMMARY){
+            for(int y=0;y<sim->world->height;y++){
+                for(int x=0;x<sim->world->width;x++){
+                    w.x=x; w.y=y;
+                    send_world_state(&w,0,rep);
+                }
+            }
+        }
+        pthread_mutex_unlock(&mode_mutex);
+    }
+    running=0;
+    return NULL;
+}
+
+int main(){
+    // Nacitanie ClientConfig
+    ClientConfig client_cfg;
+    read(STDIN_FILENO,&client_cfg,sizeof(client_cfg));
+
+    // Vytvorenie simulacie
+    if(client_cfg.from_file){
+        sim = create_simulation_from_file(client_cfg.file_name, client_cfg.cfg.replikacie);
+    } else {
+        if(client_cfg.cfg.world_type==0)
+            sim = create_simulation(client_cfg.cfg.width, client_cfg.cfg.height, client_cfg.cfg.K, client_cfg.cfg.replikacie);
+        else
+            sim = create_simulation_with_obstacles(client_cfg.cfg.width, client_cfg.cfg.height, client_cfg.cfg.K, client_cfg.cfg.replikacie, client_cfg.cfg.obstacle_ratio);
+
+        sim->walker.prob_up=client_cfg.cfg.prob_up;
+        sim->walker.prob_down=client_cfg.cfg.prob_down;
+        sim->walker.prob_left=client_cfg.cfg.prob_left;
+        sim->walker.prob_right=client_cfg.cfg.prob_right;
+        sim->walker.x=client_cfg.cfg.width/2;
+        sim->walker.y=client_cfg.cfg.height/2;
+    }
+
+    fd_cmd=STDIN_FILENO;
+    fd_out=STDOUT_FILENO;
+
+    pthread_t sim_th, cmd_th;
+    pthread_create(&cmd_th,NULL,command_thread,NULL);
+    pthread_create(&sim_th,NULL,simulation_thread,NULL);
+
+    pthread_join(sim_th,NULL);
+    pthread_join(cmd_th,NULL);
+
+    destroy_simulation(sim);
+    return 0;
+}
